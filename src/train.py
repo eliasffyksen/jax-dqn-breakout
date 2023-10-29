@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 from functools import partial
+import random
+from pprint import pprint
 
 import jax
 import jax.numpy as jnp
@@ -89,15 +91,14 @@ replay_buffer = ReplayBuffer(
 
 profiler = Profiler()
 
-for step in range(hyperparameters.train_length):
+for step, rng in enumerate(jax.random.split(rng, hyperparameters.train_length)):
 
     if step % hyperparameters.rollout_freq == 0:
         profiler.enter('rollout.action_selection')
 
-        rng, eps_rng, action_rng = jax.random.split(rng, 3)
         eps = calculate_epsilon(step, hyperparameters)
-        if jax.random.uniform(eps_rng, ()) < eps or step < hyperparameters.start_learning:
-            action = jax.random.randint(action_rng, (), 0, 4)
+        if random.uniform(0, 1) < eps or step < hyperparameters.start_learning:
+            action = random.randint(0, 3)
         else:
             action = agent.predict(convert_state(state)[None])[0]
             action = action.argmax()
@@ -121,12 +122,11 @@ for step in range(hyperparameters.train_length):
             state = jnp.array(state[0])
 
     if step % hyperparameters.train_freq == 0:
-        profiler.enter('train')
-
-        rng, train_rng = jax.random.split(rng)
-        batch = replay_buffer.batch(hyperparameters.batch_size, train_rng)
+        profiler.enter('train.sample')
+        batch = replay_buffer.batch(hyperparameters.batch_size, rng)
 
         if batch is not None:
+            profiler.enter('train.do')
             batch['states'] = convert_state(batch['states'])
             batch['next_states'] = convert_state(batch['next_states'])
             agent.train(batch)
@@ -136,7 +136,7 @@ for step in range(hyperparameters.train_length):
 
         agent.update_target()
 
-    if step % hyperparameters.log_interval == 0 and wdb is not None:
+    if step % hyperparameters.log_interval == 0:
         profiler.enter('log')
 
         profiling_times = profiler.get()
@@ -148,4 +148,12 @@ for step in range(hyperparameters.train_length):
             'time_per_frame': time_sum / max(step, 1),
         }
 
-        wdb.log(data, step=step)
+        if wdb is not None:
+            wdb.log(data, step=step)
+        else:
+            pprint({
+                'step': step,
+                'data': data,
+            })
+
+    profiler.enter('misc')
