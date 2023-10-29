@@ -43,6 +43,7 @@ def make_train_fn(
             next_states: jax.Array,
             terminals: jax.Array,
     ) -> tuple[optax.Params, optax.OptState]:
+        print('tracing train step')
         grads = grad_fn(policy_params, policy_target_params,
                         states, actions, rewards, next_states, terminals)
         updates, opt_state = opt.update(grads, opt_state)
