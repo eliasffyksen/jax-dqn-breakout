@@ -145,7 +145,7 @@ for step in range(hyperparameters.train_length):
         data = {
             'profiling': profiling_times,
             'profile_time_sum': time_sum,
-            'time_per_frame': time_sum / step,
+            'time_per_frame': time_sum / max(step, 1),
         }
 
         wdb.log(data, step=step)
