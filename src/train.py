@@ -70,7 +70,7 @@ env = AtariWrapper(env)
 env = DummyVecEnv([lambda: env])
 env = VecFrameStack(env, hyperparameters.frame_stack)
 state = env.reset()
-state = jnp.array(state[0])
+state = state[0]
 
 agent = Agent(
     policy=policy,
@@ -100,12 +100,12 @@ for step, rng in enumerate(jax.random.split(rng, hyperparameters.train_length)):
         if random.uniform(0, 1) < eps or step < hyperparameters.start_learning:
             action = random.randint(0, 3)
         else:
-            action = agent.predict(convert_state(state)[None])[0]
+            action = agent.predict(convert_state(jnp.array(state))[None])[0]
             action = action.argmax()
 
         profiler.enter('rollout.env_step')
         next_state, reward, terminal, _ = env.step([action])
-        next_state = jnp.array(next_state[0])
+        next_state = next_state[0]
         profiler.enter('rollout.save_to_buffer')
         replay_buffer.push(
             states=state,
@@ -119,16 +119,18 @@ for step, rng in enumerate(jax.random.split(rng, hyperparameters.train_length)):
         profiler.enter('rollout.reset')
         if terminal:
             state = env.reset()
-            state = jnp.array(state[0])
+            state = state[0]
 
     if step % hyperparameters.train_freq == 0:
         profiler.enter('train.sample')
         batch = replay_buffer.batch(hyperparameters.batch_size, rng)
 
         if batch is not None:
-            profiler.enter('train.do')
+            batch = {k: jnp.array(v) for k, v in batch.items()}
             batch['states'] = convert_state(batch['states'])
             batch['next_states'] = convert_state(batch['next_states'])
+
+            profiler.enter('train.do')
             agent.train(batch)
 
     if step % hyperparameters.update_target_every == 0:
