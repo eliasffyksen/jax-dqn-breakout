@@ -139,8 +139,13 @@ for step in range(hyperparameters.train_length):
     if step % hyperparameters.log_interval == 0 and wdb is not None:
         profiler.enter('log')
 
+        profiling_times = profiler.get()
+        time_sum = sum(profiling_times.values())
+
         data = {
-            'profiling': profiler.get(),
+            'profiling': profiling_times,
+            'profile_time_sum': time_sum,
+            'time_per_frame': time_sum / step,
         }
 
         wdb.log(data, step=step)
